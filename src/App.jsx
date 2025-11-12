@@ -1,17 +1,27 @@
-import { useState } from 'react';
-import './ChatApp.css'; // Create a CSS file for styling
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCog, faTrashCan, faPaperPlane, faRobot } from '@fortawesome/free-solid-svg-icons';
+import { useState } from "react";
+import "./ChatApp.css"; // Create a CSS file for styling
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCog,
+  faTrashCan,
+  faPaperPlane,
+  faRobot,
+} from "@fortawesome/free-solid-svg-icons";
+
+// ensure fallback to deployed backend if VITE var is missing
+const backendUrl =
+  import.meta.env.VITE_BACKEND_URL ||
+  "https://my-chatbot-api-frcgame3gufpfuh2.westeurope-01.azurewebsites.net";
 
 const ChatApp = () => {
   const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  // remove placeholder defaults so deployed build won't POST to junk paths
   const [settingsData, setSettingsData] = useState({
-    apiUrl: 'Azure OpenAI Endpoint',
-    apiKey: 'Azure OpenAI Key',
+    apiUrl: "",
+    apiKey: "",
   });
-
 
   const addMessage = (text, role) => {
     const newMessage = { text, role };
@@ -22,55 +32,67 @@ const ChatApp = () => {
     setInputText(e.target.value);
   };
 
-    const handleSendMessage = async () => {
-    if (inputText.trim() === '') return;
+  const handleSendMessage = async () => {
+    if (inputText.trim() === "") return;
 
     // Add the user message immediately
-    addMessage(inputText, 'user');
+    addMessage(inputText, "user");
     const userInput = inputText;
-    setInputText('');
+    setInputText("");
 
-    // Build chat message history (you can extend this later)
+    // Build chat message history
     const requestBody = {
       messages: [
-        { role: 'system', content: 'You are an AI assistant that helps people find information.' },
-        { role: 'user', content: userInput },
+        {
+          role: "system",
+          content:
+            "You are an AI assistant that helps people find information.",
+        },
+        { role: "user", content: userInput },
       ],
     };
 
     try {
-      // 👇 Call your local backend (secure)
-     // 1st const response = await fetch('http://localhost:5000/api/chat', {
-     // 2nd const response = await fetch('https://my-chatbot-api-frcgame3gufpfuh2.westeurope-01.azurewebsites.net/', {
-     // Use environment variable for backend URL, fallback to localhost during dev
-const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+      // use already-defined backendUrl (fallback to deployed or VITE var)
+      console.log(
+        "DEBUG: sendToBackend called. messages:",
+        requestBody.messages
+      );
+      console.log("DEBUG: sending to URL:", `${backendUrl}/api/chat`);
 
-const response = await fetch(`${backendUrl}/api/chat`, {
-     method: 'POST',
+      const response = await fetch(`${backendUrl}/api/chat`, {
+        method: "POST",
         body: JSON.stringify(requestBody),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
 
+      console.log("DEBUG: fetch returned status", response.status);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch response from backend');
+        const errText = await response.text();
+        throw new Error(`Backend error ${response.status}: ${errText}`);
       }
 
       const responseData = await response.json();
-      console.log('Response data:', responseData);
+      console.log("DEBUG: backend response data:", responseData);
 
-      // Handle both Azure and OpenAI response formats
+      // Handle various response shapes
       const assistantReply =
-        responseData.reply ||
-        responseData.choices?.[0]?.message?.content ||
-        'No reply received.';
+        responseData.text ??
+        responseData.choices?.[0]?.message?.content ??
+        responseData.choices?.[0]?.content ??
+        responseData.reply ??
+        JSON.stringify(responseData);
 
-      addMessage(assistantReply, 'assistant');
+      addMessage(assistantReply, "assistant");
     } catch (error) {
-      console.error('Error fetching data from backend:', error.message);
-      addMessage('Error connecting to backend', 'assistant');
+      console.error("Error fetching data from backend:", error);
+      addMessage(
+        "Error connecting to backend: " + (error.message || ""),
+        "assistant"
+      );
     }
   };
-
 
   const handleClearChat = () => {
     setMessages([]);
@@ -85,16 +107,19 @@ const response = await fetch(`${backendUrl}/api/chat`, {
   };
 
   const handleSaveSettings = () => {
-    // You may want to add validation logic here before saving the settings
-    setSettingsData({ apiUrl: settingsData.apiUrl, apiKey: settingsData.apiKey });
+    // only store values if you want to override temporarily
+    setSettingsData({
+      apiUrl: settingsData.apiUrl,
+      apiKey: settingsData.apiKey,
+    });
     setShowSettings(false);
   };
 
   return (
     <div className="container">
-      <h2><FontAwesomeIcon icon={faRobot} /> AI Chatapp</h2>
-      {/* new code */}
-      
+      <h2>
+        <FontAwesomeIcon icon={faRobot} /> AI Chatapp
+      </h2>
 
       {showSettings && (
         <div className="settings-popup">
@@ -104,7 +129,9 @@ const response = await fetch(`${backendUrl}/api/chat`, {
               type="text"
               id="apiUrl"
               value={settingsData.apiUrl}
-              onChange={(e) => setSettingsData({ ...settingsData, apiUrl: e.target.value })}
+              onChange={(e) =>
+                setSettingsData({ ...settingsData, apiUrl: e.target.value })
+              }
             />
 
             <label htmlFor="apiKey">API Key:</label>
@@ -112,7 +139,9 @@ const response = await fetch(`${backendUrl}/api/chat`, {
               type="text"
               id="apiKey"
               value={settingsData.apiKey}
-              onChange={(e) => setSettingsData({ ...settingsData, apiKey: e.target.value })}
+              onChange={(e) =>
+                setSettingsData({ ...settingsData, apiKey: e.target.value })
+              }
             />
 
             <button onClick={handleSaveSettings}>Save</button>
@@ -120,13 +149,16 @@ const response = await fetch(`${backendUrl}/api/chat`, {
           </div>
         </div>
       )}
-      {/* end new code */}
-
 
       <div className="chat-app">
         <div className="chat-window">
           {messages.map((message, index) => (
-            <div key={index} className={message.role === 'user' ? 'user-message' : 'assistant-message'}>
+            <div
+              key={index}
+              className={
+                message.role === "user" ? "user-message" : "assistant-message"
+              }
+            >
               {message.text}
             </div>
           ))}
@@ -138,8 +170,12 @@ const response = await fetch(`${backendUrl}/api/chat`, {
             onChange={handleUserInput}
             placeholder="Type your message..."
           />
-          <button onClick={handleSendMessage}><FontAwesomeIcon icon={faPaperPlane} /> Send</button>
-          <button onClick={handleClearChat}><FontAwesomeIcon icon={faTrashCan} /> Clear</button>
+          <button onClick={handleSendMessage}>
+            <FontAwesomeIcon icon={faPaperPlane} /> Send
+          </button>
+          <button onClick={handleClearChat}>
+            <FontAwesomeIcon icon={faTrashCan} /> Clear
+          </button>
           <button className="settings-button" onClick={handleSettingsClick}>
             <FontAwesomeIcon icon={faCog} /> Settings
           </button>
